@@ -1,4 +1,4 @@
-# Karoo Trail Names
+# Karoo Trail Names [![Download Latest APK](https://img.shields.io/badge/Download-Latest%20APK-green?style=for-the-badge&logo=android)](https://github.com/robrusk/Karoo-Trail-Names/releases/latest/download/RRD_Trail_Names_v1.1_beta.apk)
 ![Trail Names in Action](k2_noice.jpg)
 <br>
 A custom extension for the Hammerhead Karoo 2 that displays your current trail name.
