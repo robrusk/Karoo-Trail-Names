@@ -34,3 +34,4 @@ Successfully tested at the Alien Run trailhead in Aztec, NM!
 Dashboard Integration: Exploring ways to sync preferred trail areas directly from the Hammerhead Dashboard.
 
 SRAM AXS Integration: Using shifter button presses to manually trigger a "Trail Name" audio announcement or refresh.
+RRD
