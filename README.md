@@ -1,5 +1,5 @@
 # Karoo Trail Names
-![Trail Names in Action](k2_noice.jpeg)
+![Trail Names in Action](k2_noice.jpg)
 A custom extension for the Hammerhead Karoo 2 that displays your current trail name.
 
 ### Features
