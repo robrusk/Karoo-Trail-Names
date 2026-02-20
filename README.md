@@ -21,3 +21,16 @@ Successfully tested at the Alien Run trailhead in Aztec, NM!
 * **No Affiliation:** This app is developed by a private enthusiast and is not endorsed, supported, or verified by Hammerhead or SRAM.
 * **Use at Your Own Risk:** Sideloading apps can affect device stability. The developer is not responsible for any issues arising from the use of this software.
 * **Data Sources:** Trail data is provided by [OpenStreetMap](https://www.openstreetmap.org/) contributors under the ODbL license.
+<br>
+<br>
+
+## 🚀 Development Roadmap
+- [x] **v1.0-beta:** Core GPS matching & Offline storage.
+- [ ] **v1.1:** Auto-detect trail area based on GPS (Remove any hardcoded coordinates).
+- [ ] **v1.2:** Customizable beep patterns (Single vs. Double chirp).
+- [ ] **v2.0:** Multi-area management (Download Phoenix, Aztec, and Sedona separately).
+
+- [ ] 🔍 Future Research
+Dashboard Integration: Exploring ways to sync preferred trail areas directly from the Hammerhead Dashboard.
+
+SRAM AXS Integration: Using shifter button presses to manually trigger a "Trail Name" audio announcement or refresh.
