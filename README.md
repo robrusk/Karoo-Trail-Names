@@ -32,3 +32,10 @@ Successfully tested at the Alien Run trailhead in Aztec, NM!
 - [ ] 🔍 Future Research
   - Dashboard Integration: Exploring ways to sync preferred trail areas directly from the Hammerhead Dashboard.
   - SRAM AXS Integration: Using shifter button presses to manually trigger a "Trail Name" audio announcement or refresh.
+<br>
+## 📜 Version History
+
+| Version | Date | Highlights |
+| :--- | :--- | :--- |
+| **v1.1-beta** | Feb 20, 2026 | Added Multi-Area support, GPS "Download Near Me", 20-mile radius, and Rising Chirp audio alerts. |
+| **v1.0-beta** | Feb 19, 2026 | Initial release: Core GPS matching, offline storage (7 trails), and data field integration. |
