@@ -11,4 +11,5 @@ A custom extension for the Hammerhead Karoo 2 that displays your current trail n
 
 ### Local Test Result
 Successfully tested at the Alien Run trailhead in Aztec, NM!
+<br>
 <img src="https://github.com/user-attachments/assets/2e1239fd-6402-47da-816d-d632c43cf725" width="300" alt="Trail Names Result">
