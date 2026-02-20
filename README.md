@@ -4,7 +4,7 @@
 A custom extension for the Hammerhead Karoo 2 that displays your current trail name.
 
 ### Features
-* **Offline Trails:** Downloads a 10-mile radius of trails for offline use.
+* **Offline Trails:** Downloads a 20-mile radius of trails for offline use.
 * **Multi-Area Support:** Save trails for Aztec, Phoenix, or anywhere else you ride.
 * **Beep Alerts:** Rising chirps when you enter a new trail segment.
 * **Smart Priority:** Prefers named trails and shows MTB difficulty ratings.
@@ -26,12 +26,9 @@ Successfully tested at the Alien Run trailhead in Aztec, NM!
 
 ## 🚀 Development Roadmap
 - [x] **v1.0-beta:** Core GPS matching & Offline storage.
-- [ ] **v1.1:** Auto-detect trail area based on GPS (Remove any hardcoded coordinates).
+- [x] **v1.1-beta:** Auto-detect trail area based on GPS, multi-area management, delete areas, rising chirp beep alerts.
 - [ ] **v1.2:** Customizable beep patterns (Single vs. Double chirp).
-- [ ] **v2.0:** Multi-area management (Download Phoenix, Aztec, and Sedona separately).
-
+- [ ] **v1.3:** Adjustable download radius from app UI.
 - [ ] 🔍 Future Research
-Dashboard Integration: Exploring ways to sync preferred trail areas directly from the Hammerhead Dashboard.
-
-SRAM AXS Integration: Using shifter button presses to manually trigger a "Trail Name" audio announcement or refresh.
-RRD
+  - Dashboard Integration: Exploring ways to sync preferred trail areas directly from the Hammerhead Dashboard.
+  - SRAM AXS Integration: Using shifter button presses to manually trigger a "Trail Name" audio announcement or refresh.
