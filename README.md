@@ -39,7 +39,7 @@ A community-built extension for Hammerhead Karoo that displays real-time trail n
 
 Successfully field-tested at multiple trail systems in Aztec, NM with 700+ trails loaded across 4 areas.
 
-<img src="https://github.com/user-attachments/assets/73d3c6d1-ccf4-4e90-beaa-57ba2e59c2b5" width="400" alt="Trail Names Screenshot">
+<img src="https://github.com/user-attachments/assets/73d3c6d1-ccf4-4e90-beaa-57ba2e59c2b5" width="240" alt="Trail Names Screenshot">
 
 ---
 
