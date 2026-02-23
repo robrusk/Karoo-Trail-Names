@@ -1,0 +1,80 @@
+Subject: K2/K3 Extension Proposal: RRD Trail Names (Beta)
+Project Overview:
+I have developed a lightweight, offline-first extension for the Karoo ecosystem that provides real-time trail name identification and difficulty ratings. This addresses a common user request: knowing the specific name of the trail segment currently being ridden without needing to stop or consult a secondary map.
+
+Key Technical Features:
+
+Massive Offline Support: Implements a dynamic caching system that downloads all trail data within a 10-mile radius via the Overpass API. This allows for full functionality in remote areas without cell service.
+
+Smart Audio Alerts: Features a "Rising Chirp" beep pattern that triggers at 15 meters when approaching a new trail segment, allowing for eyes-on-the-trail navigation.
+
+Native Integration: Built on the official Karoo SDK (v1.1.8), ensuring compatibility with both the Karoo 2 and the newest Karoo (K3).
+
+Clean Architecture: The project is modularized (Overpass Service, Trail Storage, Matcher) and uses the official RemoteViews for the data field display.
+
+Goal:
+The project is currently in a stable Beta (v1.0-beta). I would like to discuss the possibility of getting this extension reviewed for the official Hammerhead library or listed on the Awesome-Karoo community resource.
+
+Repository (Private Access available upon request):
+https://github.com/robrusk/Karoo-Trail-Names
+
+
+
+_**Release Notes: RRD Trail Names v1.0-beta**_
+"Trail names for your Karoo 2 — the feature they forgot to add."
+
+Dynamic Downloads: One-tap downloading of all trails within a 10-mile radius of your current GPS location.
+
+Massive Coverage: Tested to handle 132+ trails simultaneously for high-density networks (like Phoenix/Aztec).
+
+Rising Chirp Alerts: Audible "rising" beep pattern triggers at 15 meters when approaching a new trail segment.
+
+MTB Scale Integration: Automatically identifies and labels "Unnamed Trails" if they have an OSM difficulty rating.
+
+True Offline Use: Once downloaded, no WiFi or phone connection is required. Data is stored locally in the trail_areas directory.
+
+_**Compatibility**_
+This extension is built using the latest Hammerhead SDK and is compatible with:
+
+Hammerhead Karoo (7th Gen / "Karoo 3"): Full native support via the companion app sideloading process.
+
+Hammerhead Karoo 2: Full support (requires ADB sideloading as it is the older Android platform).
+
+Note: While Hammerhead refers to the newest device simply as "The Karoo," this extension is designed to provide the same high-level trail name features across both generations of hardware.
+
+
+**_How to Load (The "Joe in the Garage" Method)_**
+Because this is a community extension, it requires a quick sideload.
+
+Enable Developer Mode: On your Karoo 2, go to Settings > About > Build Number. Tap "Build Number" 7 times until it says you are a developer.
+
+Turn on ADB: Go to Settings > Developer Options and toggle on USB Debugging.
+
+Plug and Push: Connect your Karoo 2 to your computer via USB. Open your terminal/command prompt and run:
+adb install RRD_Trail_Names_v1.0_beta.apk
+
+The "Handshake": On the Karoo home screen, open the Trail Names app icon once. This "registers" the extension with the system.
+
+Add to Page: Open a Ride Profile, edit a data page, and add the "Trail Name" field (found under the "Trail Names" category).
+
+
+
+Subject: K2/K3 Extension Proposal: RRD Trail Names (Beta)
+Project Overview:
+I have developed a lightweight, offline-first extension for the Karoo ecosystem that provides real-time trail name identification and difficulty ratings. This addresses a common user request: knowing the specific name of the trail segment currently being ridden without needing to stop or consult a secondary map.
+
+Key Technical Features:
+
+Massive Offline Support: Implements a dynamic caching system that downloads all trail data within a 10-mile radius via the Overpass API. This allows for full functionality in remote areas without cell service.
+
+Smart Audio Alerts: Features a "Rising Chirp" beep pattern that triggers at 15 meters when approaching a new trail segment, allowing for eyes-on-the-trail navigation.
+
+Native Integration: Built on the official [Karoo SDK (v1.1.8)](https://www.google.com/search?q=https://github.com/hammerheadnav/karoo-ext/releases/tag/1.1.8), ensuring compatibility with both the Karoo 2 and the newest Karoo (K3).
+
+Clean Architecture: The project is modularized (Overpass Service, Trail Storage, Matcher) and uses the official RemoteViews for the data field display.
+
+Goal:
+The project is currently in a stable Beta ([v1.0-beta](https://github.com/robrusk/Karoo-Trail-Names/releases/tag/v1.0-beta)). I would like to discuss the possibility of getting this extension reviewed for the official Hammerhead library or listed on the [Awesome-Karoo community resource](https://github.com/timklge/awesome-karoo).
+
+Repository (Private Access available upon request):
+https://github.com/robrusk/Karoo-Trail-Names

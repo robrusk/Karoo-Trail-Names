@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ExtensionInfo
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    id="trail-name"
+    displayName="Trail Names"
+    icon="@mipmap/ic_launcher">
+    <DataType
+        typeId="current-trail"
+        description="Shows the name of the trail you are currently on"
+        displayName="Trail Name"
+        graphical="true"
+        icon="@mipmap/ic_launcher" />
+</ExtensionInfo>
