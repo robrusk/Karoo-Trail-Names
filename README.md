@@ -1,6 +1,6 @@
 # RRD Trail Names for Karoo
 
-**"Trail names for your Karoo — the feature they forgot to add."**
+**"Trail names for your Karoo- Don't stop at trail signs"**
 
 ![Trail Names in Action](https://github.com/user-attachments/assets/e48245d2-cac7-407f-b8e0-99a8db633299)
 
