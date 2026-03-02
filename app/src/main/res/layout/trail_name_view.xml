@@ -4,17 +4,28 @@
     android:layout_height="match_parent"
     android:gravity="center"
     android:orientation="vertical"
-    android:background="@android:color/black">
+    android:background="@android:color/white"
+    android:padding="4dp">
 
     <TextView
         android:id="@+id/trail_status"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:gravity="center"
         android:text="No Trail"
-        android:textColor="@android:color/white"
-        android:textSize="20sp"
-        android:maxLines="2"
+        android:textColor="#808080"
+        android:textSize="18sp"
+        android:maxLines="3"
         android:ellipsize="end" />
+
+    <ProgressBar
+        android:id="@+id/proximity_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:max="100"
+        android:progress="0"
+        android:progressDrawable="@android:drawable/progress_horizontal" />
 
 </LinearLayout>

@@ -9,50 +9,50 @@ import android.util.Log
 
 class TrailNameDataField(private val context: Context) : LocationListener {
 
-    private val trailStorage = TrailStorage(context)
-    private val trailMatcher = TrailMatcher()
+    private lateinit var trailStorage: TrailStorage
+    private lateinit var matcher: TrailMatcher
     private var trails: List<Trail> = emptyList()
-    private val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-
     var currentTrailName: String = "No Trail"
-        private set
 
     fun start() {
-        // FIX: Changed from loadTrails() to loadAllTrails() to match your new storage logic
+        trailStorage = TrailStorage(context)
+        matcher = TrailMatcher()
         trails = trailStorage.loadAllTrails()
         Log.d("TrailNameDataField", "Started tracking with ${trails.size} trails loaded")
 
         try {
+            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             locationManager.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                1000, // 1 second
-                5f,   // 5 meters
-                this
+                LocationManager.GPS_PROVIDER, 1000, 5f, this
             )
         } catch (e: SecurityException) {
-            currentTrailName = "GPS Permission Denied"
-            Log.e("TrailNameDataField", "GPS Permission Denied")
+            Log.e("TrailNameDataField", "Location permission denied", e)
         }
     }
 
     fun stop() {
-        locationManager.removeUpdates(this)
+        try {
+            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            locationManager.removeUpdates(this)
+        } catch (e: Exception) {
+            Log.e("TrailNameDataField", "Error stopping", e)
+        }
     }
 
     override fun onLocationChanged(location: Location) {
-        val match = trailMatcher.findCurrentTrail(
+        if (trails.isEmpty()) return
+
+        val match = matcher.findCurrentTrail(
             currentLat = location.latitude,
             currentLon = location.longitude,
             trails = trails,
             bearing = location.bearing
         )
 
-        currentTrailName = trailMatcher.formatTrailStatus(match)
+        currentTrailName = matcher.formatTrailStatus(match)
     }
 
     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
     override fun onProviderEnabled(provider: String) {}
-    override fun onProviderDisabled(provider: String) {
-        currentTrailName = "GPS Disabled"
-    }
+    override fun onProviderDisabled(provider: String) {}
 }
