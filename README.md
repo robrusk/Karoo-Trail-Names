@@ -2,7 +2,10 @@
 
 **"Trail names for your Karoo- Don't stop at trail signs"**
 
-![Trail Names in Action](https://github.com/user-attachments/assets/e48245d2-cac7-407f-b8e0-99a8db633299)
+
+<img width="384" height="487" alt="Alien_sh_loop" src="https://github.com/user-attachments/assets/be730b9c-92b3-4365-b952-6e72d5f177dd" />
+
+
 
 A community-built extension for Hammerhead Karoo that displays real-time trail names, directional arrows, and distance on your data field during rides. Works completely offline after initial download.
 
@@ -102,7 +105,11 @@ Download trails for as many areas as you want. Each area is saved separately. Us
 | SDK | karoo-ext 1.1.8 |
 | Data Source | OpenStreetMap Overpass API |
 | Storage | Local JSON files (offline after download) |
-| License | MIT |
+| License | MIT |![Uploading Alien_sh_loop.png…]()
+![Uploading Alien_sh_loop.png…]()
+![Uploading Alien_sh_loop.png…]()
+![Uploading Alien_sh_loop.png…]()
+
 | Data License | ODbL (OpenStreetMap) |
 
 ---
