@@ -1,5 +1,18 @@
-
 package com.example.karootrailnames
+
+// ============================================================
+// Main Activity - Configuration & Trail Management Screen
+// This is the app's home screen on the Karoo. It provides:
+//   1. GPS location display
+//   2. "Download Trails Near Me" button
+//   3. List of saved trail areas with trail counts
+//   4. Delete individual areas
+//   5. Live trail name preview (updates every 3 seconds)
+//
+// This screen is NOT used during rides — it's for setup only.
+// During rides, the extension service and data type handle
+// everything independently via startStream() and startView().
+// ============================================================
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -43,24 +56,38 @@ class MainActivity : AppCompatActivity() {
         locationText = findViewById(R.id.locationText)
         areaList = findViewById(R.id.areaList)
 
-        // Migrate old trails.json to new area format
+        // Handle migration from early versions that stored all trails
+        // in a single flat file instead of organized by area
         trailStorage.migrateOldTrails()
 
-        // Show saved areas on startup
+        // Show previously downloaded areas on startup
         refreshAreaList()
 
         downloadButton.setOnClickListener {
             downloadTrailsNearMe()
         }
 
-        // Start GPS for location display
+        // Start GPS for location display on this screen
         startGPS()
 
-        // Start trail name tracking
+        // TrailNameDataField provides a live trail name preview
+        // on the main screen (separate from the ride data field)
         trailNameDataField.start()
         startStatusUpdates()
     }
 
+    // ============================================================
+    // GPS SETUP
+    // Gets the rider's current position for two purposes:
+    //   1. Display coordinates on screen (confirms GPS lock)
+    //   2. Center point for trail download radius
+    //
+    // Update interval: 5 seconds, 50m minimum distance
+    // (Relaxed compared to ride mode — this is just for UI display)
+    //
+    // Also grabs last known location as a fallback so the screen
+    // isn't blank while waiting for a fresh GPS fix.
+    // ============================================================
     private fun startGPS() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED) {
@@ -82,6 +109,7 @@ class MainActivity : AppCompatActivity() {
 
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000L, 50f, listener)
 
+        // Use last known location so user doesn't wait for a fresh fix
         val lastKnown = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
         if (lastKnown != null) {
             currentLocation = lastKnown
@@ -89,6 +117,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ============================================================
+    // TRAIL DOWNLOAD
+    // Triggered by the "Download Trails Near Me" button.
+    // Uses current GPS position as center, downloads trails within
+    // 10-mile radius via OverpassService, then:
+    //   1. Reverse geocodes the location to get a human-readable
+    //      area name (e.g., "Aztec, New Mexico")
+    //   2. Saves as a named TrailArea in TrailStorage
+    //   3. Refreshes the area list on screen
+    //
+    // Runs as a coroutine so the UI stays responsive during
+    // the network request. Button is disabled during download
+    // to prevent duplicate requests.
+    // ============================================================
     private fun downloadTrailsNearMe() {
         val loc = currentLocation
         if (loc == null) {
@@ -104,6 +146,7 @@ class MainActivity : AppCompatActivity() {
                 val trails = overpassService.downloadTrailsNearby(loc.latitude, loc.longitude, 10.0)
 
                 if (trails.isNotEmpty()) {
+                    // Get a human-readable name for this download area
                     val areaName = getAreaName(loc.latitude, loc.longitude)
 
                     val area = TrailArea(
@@ -128,6 +171,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ============================================================
+    // REVERSE GEOCODING
+    // Converts GPS coordinates to a human-readable area name
+    // using OpenStreetMap's Nominatim API (free, no API key).
+    //
+    // Zoom level 10 = city/town level granularity.
+    // Falls back through: city → town → village → county → state
+    // If all else fails, uses raw lat/lon coordinates as the name.
+    //
+    // User-Agent header required by Nominatim's terms of use.
+    // Short timeouts (5s) since this is a nice-to-have, not critical.
+    // ============================================================
     private suspend fun getAreaName(lat: Double, lon: Double): String {
         return withContext(Dispatchers.IO) {
             try {
@@ -143,6 +198,8 @@ class MainActivity : AppCompatActivity() {
                 val json = org.json.JSONObject(response)
                 val address = json.optJSONObject("address")
 
+                // Try to build a meaningful name from the address components
+                // Priority: city > town > village > county, plus state
                 if (address != null) {
                     val city = address.optString("city", "")
                         .ifEmpty { address.optString("town", "") }
@@ -164,11 +221,23 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 Log.e("MainActivity", "Reverse geocoding failed", e)
+                // Fallback to coordinates — download still works, just no pretty name
                 "${String.format("%.2f", lat)}, ${String.format("%.2f", lon)}"
             }
         }
     }
 
+    // ============================================================
+    // AREA LIST DISPLAY
+    // Shows all downloaded trail areas with:
+    //   - Area name and trail count
+    //   - Delete button (X) to remove individual areas
+    //   - Preview of first 5 trail names in each area
+    //   - Total trail count across all areas
+    //
+    // Built dynamically with programmatic views since the Karoo's
+    // small screen benefits from a simple scrollable list.
+    // ============================================================
     private fun refreshAreaList() {
         areaList.removeAllViews()
 
@@ -182,6 +251,7 @@ class MainActivity : AppCompatActivity() {
         statusText.text = "$totalTrails trails across ${areas.size} areas:"
 
         areas.forEach { area ->
+            // Row: area name + trail count + delete button
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(0, 16, 0, 4)
@@ -211,6 +281,7 @@ class MainActivity : AppCompatActivity() {
             row.addView(deleteBtn)
             areaList.addView(row)
 
+            // Trail name preview — first 5 trails in the area
             val trailText = TextView(this).apply {
                 val sb = StringBuilder()
                 area.trails.take(5).forEach { trail ->
@@ -227,6 +298,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ============================================================
+    // LIVE TRAIL PREVIEW
+    // Updates the status text every 3 seconds with the current
+    // trail name from TrailNameDataField (the MainActivity's own
+    // GPS listener, separate from the ride data field).
+    //
+    // This lets users verify trail detection is working without
+    // starting a ride — useful for testing after a fresh download.
+    // ============================================================
     private fun startStatusUpdates() {
         lifecycleScope.launch {
             while (true) {
@@ -244,6 +324,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Stop the preview GPS listener when leaving the app
         trailNameDataField.stop()
     }
 }
