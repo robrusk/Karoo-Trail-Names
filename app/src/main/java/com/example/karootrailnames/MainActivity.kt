@@ -8,6 +8,7 @@ package com.example.karootrailnames
 //   3. List of saved trail areas with trail counts
 //   4. Delete individual areas
 //   5. Live trail name preview (updates every 3 seconds)
+//   6. Test Beep button (temporary - for hardware buzzer testing)
 //
 // This screen is NOT used during rides — it's for setup only.
 // During rides, the extension service and data type handle
@@ -27,6 +28,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.lifecycleScope
+import io.hammerhead.karooext.KarooSystemService
+import io.hammerhead.karooext.models.PlayBeepPattern
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -66,6 +69,62 @@ class MainActivity : AppCompatActivity() {
         downloadButton.setOnClickListener {
             downloadTrailsNearMe()
         }
+
+        // ============================================================
+        // TEST BEEP BUTTON (temporary - remove before release)
+        // Creates KarooSystemService, connects, and dispatches
+        // PlayBeepPattern directly. No ride needed. If you hear
+        // the beep, the hardware buzzer works with our code.
+        // ============================================================
+        val testBeepBtn = Button(this).apply {
+            text = "Test Beep"
+            setOnClickListener {
+                statusText.text = "Testing beep..."
+                val ks = KarooSystemService(this@MainActivity)
+                ks.connect { connected ->
+                    runOnUiThread {
+                        statusText.text = "KarooSystem connected: $connected"
+                    }
+                    if (connected) {
+                        try {
+                            ks.dispatch(
+                                PlayBeepPattern(
+                                    listOf(
+                                        PlayBeepPattern.Tone(500, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300)
+                                    )
+                                )
+                            )
+                            runOnUiThread {
+                                statusText.text = "Beep dispatched! Connected: $connected"
+                            }
+                        } catch (e: Exception) {
+                            runOnUiThread {
+                                statusText.text = "Beep FAILED: ${e.message}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        areaList.addView(testBeepBtn, 0)
 
         // Start GPS for location display on this screen
         startGPS()

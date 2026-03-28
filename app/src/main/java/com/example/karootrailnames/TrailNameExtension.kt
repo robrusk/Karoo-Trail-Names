@@ -32,26 +32,12 @@ import io.hammerhead.karooext.models.ViewConfig
 // Registered in AndroidManifest.xml with intent filter:
 //   io.hammerhead.karooext.KAROO_EXTENSION
 // Karoo OS discovers and binds to this service automatically.
-// KarooSystemService is created here so it's available for
-// hardware actions (beep alerts) dispatched from the data type.
 // ============================================================
 class TrailNameExtension : KarooExtension("trail-name", "1") {
-    var karooSystem: KarooSystemService? = null
 
     override fun onCreate() {
         super.onCreate()
         Log.d("TrailNameExtension", "TRAILEXT onCreate called")
-        Log.e("TrailNameExtension", "TRAILEXT onCreate called ERROR LEVEL")
-        try {
-            karooSystem = KarooSystemService(this)
-            Log.d("TrailNameExtension", "TRAILEXT KarooSystemService created")
-            karooSystem?.connect { connected ->
-                Log.d("TrailNameExtension", "TRAILEXT connected: $connected")
-                Log.e("TrailNameExtension", "TRAILEXT connected ERROR LEVEL: $connected")
-            }
-        } catch (e: Exception) {
-            Log.e("TrailNameExtension", "TRAILEXT onCreate CRASHED: ${e.message}", e)
-        }
     }
 
     override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
@@ -61,17 +47,12 @@ class TrailNameExtension : KarooExtension("trail-name", "1") {
 
     override fun onDestroy() {
         Log.d("TrailNameExtension", "TRAILEXT onDestroy called")
-        karooSystem?.disconnect()
-        karooSystem = null
         super.onDestroy()
     }
 
     // Register our data type with the Karoo system
-    // "extension" is the extension ID ("trail-name")
-    // "applicationContext" provides Android context for GPS, storage, etc.
-    // "this" passes the extension reference so the data type can access karooSystem for beeps
     override val types: List<DataTypeImpl> by lazy {
-        listOf(TrailNameDataType(extension, applicationContext, this))
+        listOf(TrailNameDataType(extension, applicationContext))
     }
 }
 
@@ -80,15 +61,16 @@ class TrailNameExtension : KarooExtension("trail-name", "1") {
 // This is the core of the extension. It does three things:
 //   1. startStream() - GPS listener that matches position to trails
 //   2. startView()   - Renders trail info on the Karoo data field
-//   3. Beep alerts   - Hardware buzzer when arriving on a new trail
+//   3. Alerts        - Hardware buzzer beep + screen flash on arrival
 //
-// Communication between stream and view uses @Volatile variables
-// since they run on different threads.
+// KarooSystemService is created inside startStream() following
+// the pattern from Hammerhead's official sample app and the
+// eiradar extension. This ensures the connection is established
+// within the correct context before any beep dispatch.
 // ============================================================
 class TrailNameDataType(
     extension: String,
-    private val appContext: Context,
-    private val ext: TrailNameExtension  // Reference to extension for KarooSystem access
+    private val appContext: Context
 ) : DataTypeImpl(extension, "current-trail") {
 
     // --- Shared state between startStream() and startView() ---
@@ -98,7 +80,12 @@ class TrailNameDataType(
     @Volatile
     private var currentTrailColor: Int = Color.GRAY
     @Volatile
-    private var currentProximity: Int = 0    // 0-100, drives the proximity progress bar
+    private var currentProximity: Int = 0
+
+    // Flash alert: when true, data field background flashes black
+    // for 2 seconds to provide a visual trail arrival notification
+    @Volatile
+    private var flashActive: Boolean = false
 
     // Beep tracking: prevents repeated beeps for the same trail
     // Resets when rider moves > 100m from any trail
@@ -107,30 +94,39 @@ class TrailNameDataType(
     // ============================================================
     // VIEW RENDERING
     // Uses RemoteViews (Android's cross-process view system)
-    // This is the only way to render custom UI in a Karoo data field.
     // Layout defined in res/layout/trail_name_view.xml:
     //   - TextView for trail status (name, direction, distance, difficulty symbol)
     //   - ProgressBar for proximity (fills as rider approaches trail)
+    //
+    // When flashActive is true, background inverts to black with
+    // white text for 2 seconds as a visual trail arrival alert.
     // Polls shared @Volatile variables every 1 second via Handler.
     // ============================================================
     override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
         Log.d("TrailNameDataType", "startView called")
 
-        // Initial view render
         val views = RemoteViews(context.packageName, R.layout.trail_name_view)
         views.setTextViewText(R.id.trail_status, currentTrailStatus)
         views.setTextColor(R.id.trail_status, currentTrailColor)
         views.setProgressBar(R.id.proximity_bar, 100, currentProximity, false)
         emitter.updateView(views)
 
-        // Refresh loop — updates the data field every second
         val handler = Handler(Looper.getMainLooper())
         val runnable = object : Runnable {
             override fun run() {
                 val updatedViews = RemoteViews(context.packageName, R.layout.trail_name_view)
                 updatedViews.setTextViewText(R.id.trail_status, currentTrailStatus)
-                updatedViews.setTextColor(R.id.trail_status, currentTrailColor)
                 updatedViews.setProgressBar(R.id.proximity_bar, 100, currentProximity, false)
+
+                // Flash alert: invert colors for 2 seconds on trail arrival
+                if (flashActive) {
+                    updatedViews.setInt(R.id.trail_layout, "setBackgroundColor", Color.BLACK)
+                    updatedViews.setTextColor(R.id.trail_status, Color.WHITE)
+                } else {
+                    updatedViews.setInt(R.id.trail_layout, "setBackgroundColor", Color.WHITE)
+                    updatedViews.setTextColor(R.id.trail_status, currentTrailColor)
+                }
+
                 emitter.updateView(updatedViews)
                 handler.postDelayed(this, 1000)
             }
@@ -144,12 +140,7 @@ class TrailNameDataType(
 
     // ============================================================
     // DIFFICULTY SYMBOLS
-    // Maps OSM mtb:scale tag values to standard trail markers:
-    //   ● Green circle   = Beginner (mtb:scale 0)
-    //   ■ Blue square    = Intermediate (mtb:scale 1)
-    //   ◆ Black diamond  = Advanced (mtb:scale 2-3)
-    //   ◆◆ Double diamond = Expert (mtb:scale 4-5)
-    //   (none)           = Unrated trail
+    // Maps OSM mtb:scale tag values to standard trail markers
     // ============================================================
     private fun difficultySymbol(difficulty: String?): String {
         return when (difficulty) {
@@ -157,18 +148,17 @@ class TrailNameDataType(
             "1" -> "\u25A0 "          // ■ Blue square - intermediate
             "2", "3" -> "\u25C6 "     // ◆ Black diamond - advanced
             "4", "5" -> "\u25C6\u25C6 " // ◆◆ Double black diamond - expert
-            else -> ""                // No rating — no symbol
+            else -> ""                // No rating
         }
     }
 
-    // Text color matches difficulty for visual reinforcement
     private fun difficultyColor(difficulty: String?): Int {
         return when (difficulty) {
             "0" -> Color.parseColor("#228B22")   // Green
             "1" -> Color.parseColor("#1E90FF")   // Blue
             "2", "3" -> Color.BLACK              // Black
             "4", "5" -> Color.RED                // Red
-            else -> Color.BLACK                  // Unrated — clean black text
+            else -> Color.BLACK                  // Unrated
         }
     }
 
@@ -176,22 +166,25 @@ class TrailNameDataType(
     // DATA STREAM
     // This is the engine of the extension. Runs during active rides.
     //
-    // Flow:
-    //   1. Load locally cached trails from TrailStorage (JSON)
-    //   2. Register GPS listener (2s interval, 10m min distance)
-    //   3. On each GPS update:
-    //      a. TrailMatcher finds closest trail within 300m
-    //      b. Format status text with direction arrows and distance
-    //      c. Prepend difficulty symbol (●, ■, ◆)
-    //      d. Update proximity bar (0% at 300m → 100% on trail)
-    //      e. Trigger beep if arriving on new trail (< 50m)
-    //      f. Emit data point to Karoo's stream system
-    //
-    // All trail matching runs OFFLINE from pre-downloaded OSM data.
-    // Zero network usage during rides.
+    // KarooSystemService is created HERE (not in the extension's
+    // onCreate) following the pattern used by Hammerhead's sample
+    // app and the eiradar extension. The official sample uses
+    // lazy initialization in an Activity context — creating it
+    // inside startStream() ensures the connection is established
+    // in the correct running context for dispatch to work.
     // ============================================================
     override fun startStream(emitter: Emitter<StreamState>) {
         Log.d("TrailNameDataType", "STARTING STREAM")
+
+        // --- KAROO SYSTEM CONNECTION FOR BEEP ---
+        // Created here per Hammerhead's recommended pattern.
+        // connect() callback confirms when dispatch is ready.
+        val karooSystem = KarooSystemService(appContext)
+        var karooConnected = false
+        karooSystem.connect { connected ->
+            karooConnected = connected
+            Log.d("TrailNameDataType", "BEEP KarooSystem connected: $connected")
+        }
 
         // Load trails from local cache (downloaded via OverpassService)
         val storage = TrailStorage(appContext)
@@ -215,8 +208,6 @@ class TrailNameDataType(
             override fun onLocationChanged(location: Location) {
 
                 // --- TRAIL MATCHING ---
-                // TrailMatcher.findCurrentTrail() returns the closest trail
-                // within 300m, with distance, bearing, and direction info
                 val match = matcher.findCurrentTrail(
                     currentLat = location.latitude,
                     currentLon = location.longitude,
@@ -225,17 +216,11 @@ class TrailNameDataType(
                 )
 
                 // --- FORMAT DISPLAY ---
-                // formatTrailStatus() returns strings like:
-                //   "On: Ruskers Ridge"           (< 30m, on trail)
-                //   "↑ Shred City (NW) 150m"      (approaching, with arrow + compass)
-                //   "No Trail"                     (> 300m from any trail)
                 val symbol = difficultySymbol(match.trail?.difficulty)
                 currentTrailStatus = symbol + matcher.formatTrailStatus(match)
                 currentTrailColor = difficultyColor(match.trail?.difficulty)
 
                 // --- PROXIMITY BAR ---
-                // Linear scale: 300m = 0%, 0m = 100%
-                // Displayed as horizontal ProgressBar in the data field
                 currentProximity = if (match.distance < 300.0) {
                     ((300.0 - match.distance) / 300.0 * 100).toInt()
                 } else {
@@ -244,29 +229,45 @@ class TrailNameDataType(
 
                 Log.d("TrailNameDataType", "Status: $currentTrailStatus | Difficulty: ${match.trail?.difficulty} | Proximity: $currentProximity")
 
-                // --- BEEP ALERT ---
+                // --- BEEP + FLASH ALERT ---
                 // Triggers when rider arrives within 50m of a new trail.
-                // Uses PlayBeepPattern to fire the Karoo hardware buzzer.
-                // lastBeepTrail prevents repeated beeps for the same trail.
-                // Resets when rider moves > 100m away (ready to beep again).
+                // 1. Dispatches 10 low-pitch beeps (500Hz) to hardware buzzer
+                // 2. Flashes data field background black for 2 seconds
+                // Only dispatches if KarooSystem is confirmed connected.
                 val trailName = match.trail?.name ?: ""
                 if (match.distance < 50.0 && trailName.isNotEmpty() && trailName != lastBeepTrail) {
-                    Log.d("TrailNameDataType", "BEEP! Arrived on: $trailName")
+                    Log.d("TrailNameDataType", "BEEP! Arrived on: $trailName (karooConnected=$karooConnected)")
                     lastBeepTrail = trailName
 
-                    // Access KarooSystemService via extension reference
-                    val ks = ext.karooSystem
-                    Log.d("TrailNameDataType", "KarooSystem is ${if (ks != null) "AVAILABLE" else "NULL"}")
+                    // Visual alert: flash background black for 2 seconds
+                    flashActive = true
+                    mainHandler.postDelayed({ flashActive = false }, 2000)
 
-                    if (ks != null) {
+                    // Audio alert: 10 low-pitch beeps via hardware buzzer
+                    if (karooConnected) {
                         try {
-                            // Two-tone beep: 800Hz then 1000Hz, 200ms each
-                            // Uses Karoo's hardware buzzer, not Android audio
-                            ks.dispatch(
+                            karooSystem.dispatch(
                                 PlayBeepPattern(
                                     listOf(
-                                        PlayBeepPattern.Tone(800, 200),
-                                        PlayBeepPattern.Tone(1000, 200)
+                                        PlayBeepPattern.Tone(4000, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(5000, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(6000, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(4000, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(5000, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(6000, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(4000, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(5000, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(6000, 300),
+                                        PlayBeepPattern.Tone(0, 100),
+                                        PlayBeepPattern.Tone(500, 300)
                                     )
                                 )
                             )
@@ -275,7 +276,7 @@ class TrailNameDataType(
                             Log.e("TrailNameDataType", "Beep failed: ${e.message}")
                         }
                     } else {
-                        Log.e("TrailNameDataType", "Cannot beep - KarooSystem is NULL!")
+                        Log.e("TrailNameDataType", "Cannot beep - KarooSystem not connected!")
                     }
                 }
 
@@ -285,8 +286,6 @@ class TrailNameDataType(
                 }
 
                 // --- EMIT DATA POINT ---
-                // Required by karoo-ext to keep the stream alive
-                // Distance value can be consumed by other data fields if needed
                 val dataPoint = DataPoint(
                     dataTypeId = "current-trail",
                     values = mapOf("value" to match.distance)
@@ -301,7 +300,6 @@ class TrailNameDataType(
         }
 
         // Register GPS listener on main thread (required by LocationManager)
-        // 2000ms update interval, 10m minimum distance between updates
         try {
             mainHandler.post {
                 try {
@@ -320,9 +318,10 @@ class TrailNameDataType(
             emitter.onNext(StreamState.NotAvailable)
         }
 
-        // Cleanup when Karoo stops the stream (ride ends, field removed, etc.)
+        // Cleanup when Karoo stops the stream
         emitter.setCancellable {
-            Log.d("TrailNameDataType", "Stream cancelled, removing GPS listener")
+            Log.d("TrailNameDataType", "Stream cancelled, cleaning up")
+            karooSystem.disconnect()
             mainHandler.post {
                 locationManager.removeUpdates(locationListener)
             }
