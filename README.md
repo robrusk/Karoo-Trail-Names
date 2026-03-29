@@ -23,6 +23,7 @@ A community-built extension for Hammerhead Karoo that displays real-time trail n
 * **Beep Alerts** — audible rising chirp when entering a new trail segment
 * **Auto Area Naming** — reverse geocodes your location via OpenStreetMap
 * **Delete Areas** — remove individual trail areas you no longer need
+* **Data Field Flash** data field change from white to balck to grab rider attention
 
 ---
 
@@ -102,7 +103,7 @@ Download trails for as many areas as you want. Each area is saved separately. Us
 
 | Detail | Info |
 |--------|------|
-| SDK | karoo-ext 1.1.8 |
+| SDK | karoo-ext 1.4 |
 | Data Source | OpenStreetMap Overpass API |
 | Storage | Local JSON files (offline after download) |
 | License | MIT |![Uploading Alien_sh_loop.png…]()
