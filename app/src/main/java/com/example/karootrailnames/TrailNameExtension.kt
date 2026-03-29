@@ -1,7 +1,7 @@
 package com.example.karootrailnames
 
 // ============================================================
-// Karoo Trail Names Extension - v1.3
+// Karoo Trail Names Extension - v1.4
 // Real-time trail name display for Karoo K2/K3
 // Built on karoo-ext 1.1.8 SDK
 // GitHub: https://github.com/robrusk/Karoo-Trail-Names
@@ -67,6 +67,10 @@ class TrailNameExtension : KarooExtension("trail-name", "1") {
 // the pattern from Hammerhead's official sample app and the
 // eiradar extension. This ensures the connection is established
 // within the correct context before any beep dispatch.
+//
+// Beep alerts can be toggled on/off by the user in MainActivity.
+// The preference is stored in SharedPreferences and read on
+// every GPS update so changes take effect immediately.
 // ============================================================
 class TrailNameDataType(
     extension: String,
@@ -193,6 +197,10 @@ class TrailNameDataType(
 
         Log.d("TrailNameDataType", "EXTENSION LOADED ${trails.size} TRAILS")
 
+        // Read beep preference (set by user in MainActivity toggle)
+        // Checked on every GPS update so changes take effect immediately
+        val prefs = appContext.getSharedPreferences("trail_names_prefs", Context.MODE_PRIVATE)
+
         if (trails.isEmpty()) {
             currentTrailStatus = "No Trails"
             currentTrailColor = Color.GRAY
@@ -231,11 +239,15 @@ class TrailNameDataType(
 
                 // --- BEEP + FLASH ALERT ---
                 // Triggers when rider arrives within 50m of a new trail.
-                // 1. Dispatches 10 low-pitch beeps (500Hz) to hardware buzzer
+                // 1. Dispatches multi-tone beeps to hardware buzzer
                 // 2. Flashes data field background black for 2 seconds
-                // Only dispatches if KarooSystem is confirmed connected.
+                // Only fires if:
+                //   - KarooSystem is connected
+                //   - Beep is enabled in user preferences
+                //   - This is a new trail (not already beeped)
                 val trailName = match.trail?.name ?: ""
-                if (match.distance < 50.0 && trailName.isNotEmpty() && trailName != lastBeepTrail) {
+                val beepEnabled = prefs.getBoolean("beep_enabled", true)
+                if (match.distance < 50.0 && trailName.isNotEmpty() && trailName != lastBeepTrail && beepEnabled) {
                     Log.d("TrailNameDataType", "BEEP! Arrived on: $trailName (karooConnected=$karooConnected)")
                     lastBeepTrail = trailName
 
@@ -243,7 +255,7 @@ class TrailNameDataType(
                     flashActive = true
                     mainHandler.postDelayed({ flashActive = false }, 2000)
 
-                    // Audio alert: 10 low-pitch beeps via hardware buzzer
+                    // Audio alert: multi-tone beeps via hardware buzzer
                     if (karooConnected) {
                         try {
                             karooSystem.dispatch(
@@ -264,8 +276,6 @@ class TrailNameDataType(
                                         PlayBeepPattern.Tone(4000, 300),
                                         PlayBeepPattern.Tone(0, 100),
                                         PlayBeepPattern.Tone(5000, 300),
-                                        PlayBeepPattern.Tone(0, 100),
-                                        PlayBeepPattern.Tone(6000, 300),
                                         PlayBeepPattern.Tone(0, 100),
                                         PlayBeepPattern.Tone(500, 300)
                                     )
