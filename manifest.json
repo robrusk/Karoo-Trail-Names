@@ -1,8 +1,13 @@
 {
-  "name": "Trail Names",
+  "label": "Trail Names",
   "packageName": "com.example.karootrailnames",
-  "version": "1.4",
-  "versionCode": 1,
-  "description": "Real-time trail name display with directional arrows, proximity bar, difficulty symbols, and beep+flash alerts. Downloads trail data from OpenStreetMap for offline use during rides.",
-  "apkUrl": "https://github.com/robrusk/Karoo-Trail-Names/releases/download/v1.4/trailname_v1.4.apk"
+  "latestApkUrl": "https://github.com/robrusk/Karoo-Trail-Names/releases/download/v1.4/TrailNames_v1.4.apk",
+  "latestVersion": "1.4",
+  "latestVersionCode": 1,
+  "iconUrl": null,
+  "developer": "Rusk Racing",
+  "description": "Real-time trail name display with directional arrows, proximity bar, difficulty symbols, and beep+flash alerts. Downloads trail data from OpenStreetMap for offline use during rides. Works on K2 and K3.",
+  "releaseNotes": "v1.4 - Beep on/off toggle, multi-tone beep alerts via hardware buzzer, screen flash on trail arrival, difficulty symbols, comprehensive code documentation.",
+  "screenshotUrls": null,
+  "tags": ["trail", "mtb", "navigation", "data-field"]
 }
