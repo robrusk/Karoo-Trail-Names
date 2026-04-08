@@ -27,6 +27,7 @@
         android:layout_height="8dp"
         android:max="100"
         android:progress="0"
-        android:progressDrawable="@android:drawable/progress_horizontal" />
+        android:progressTint="#CC0000"
+        android:progressBackgroundTint="#DDDDDD" />
 
 </LinearLayout>

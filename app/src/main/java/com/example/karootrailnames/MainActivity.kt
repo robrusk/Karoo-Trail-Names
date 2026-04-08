@@ -75,19 +75,18 @@ class MainActivity : AppCompatActivity() {
         // the extension during rides — no restart required.
         // Default: ON
         // ============================================================
+        // Beep on/off toggle — persists in SharedPreferences
         val prefs = getSharedPreferences("trail_names_prefs", MODE_PRIVATE)
-        val beepToggleBtn = Button(this).apply {
-            val beepOn = prefs.getBoolean("beep_enabled", true)
-            text = if (beepOn) "Beep: ON" else "Beep: OFF"
-            setOnClickListener {
-                val current = prefs.getBoolean("beep_enabled", true)
-                val newValue = !current
-                prefs.edit().putBoolean("beep_enabled", newValue).apply()
-                text = if (newValue) "Beep: ON" else "Beep: OFF"
-                statusText.text = "Beep alerts ${if (newValue) "enabled" else "disabled"}"
-            }
+        val beepToggleBtn = findViewById<Button>(R.id.beepToggleButton)
+        val beepOn = prefs.getBoolean("beep_enabled", true)
+        beepToggleBtn.text = if (beepOn) "Beep: ON" else "Beep: OFF"
+        beepToggleBtn.setOnClickListener {
+            val current = prefs.getBoolean("beep_enabled", true)
+            val newValue = !current
+            prefs.edit().putBoolean("beep_enabled", newValue).apply()
+            beepToggleBtn.text = if (newValue) "Beep: ON" else "Beep: OFF"
+            statusText.text = "Beep alerts ${if (newValue) "enabled" else "disabled"}"
         }
-        areaList.addView(beepToggleBtn, 0)
 
         // Start GPS for location display on this screen
         startGPS()
@@ -156,16 +155,32 @@ class MainActivity : AppCompatActivity() {
     private fun downloadTrailsNearMe() {
         val loc = currentLocation
         if (loc == null) {
-            statusText.text = "No GPS fix yet. Wait for location or go outside."
+            statusText.text = "Waiting for GPS fix..."
+            downloadButton.isEnabled = false
+            // Retry every 3 seconds until GPS locks
+            lifecycleScope.launch {
+                var attempts = 0
+                while (currentLocation == null && attempts < 20) {
+                    delay(3000)
+                    attempts++
+                    statusText.text = "Waiting for GPS fix... (${attempts * 3}s)"
+                }
+                downloadButton.isEnabled = true
+                if (currentLocation != null) {
+                    downloadTrailsNearMe()
+                } else {
+                    statusText.text = "Could not get GPS fix. Try going outside."
+                }
+            }
             return
         }
 
         lifecycleScope.launch {
             try {
                 downloadButton.isEnabled = false
-                statusText.text = "Downloading trails within 20 miles..."
+                statusText.text = "Downloading trails within 30 miles..."
 
-                val trails = overpassService.downloadTrailsNearby(loc.latitude, loc.longitude, 10.0)
+                val trails = overpassService.downloadTrailsNearby(loc.latitude, loc.longitude, 15.0)
 
                 if (trails.isNotEmpty()) {
                     // Get a human-readable name for this download area

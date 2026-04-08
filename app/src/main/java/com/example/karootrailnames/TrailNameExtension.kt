@@ -1,7 +1,7 @@
 package com.example.karootrailnames
 
 // ============================================================
-// Karoo Trail Names Extension - v1.4
+// Karoo Trail Names Extension - v1.5
 // Real-time trail name display for Karoo K2/K3
 // Built on karoo-ext 1.1.8 SDK
 // GitHub: https://github.com/robrusk/Karoo-Trail-Names
@@ -113,7 +113,7 @@ class TrailNameDataType(
         views.setTextViewText(R.id.trail_status, currentTrailStatus)
         views.setTextColor(R.id.trail_status, currentTrailColor)
         views.setProgressBar(R.id.proximity_bar, 100, currentProximity, false)
-        emitter.updateView(views)
+        views.setInt(R.id.trail_layout, "setBackgroundColor", Color.WHITE)
 
         val handler = Handler(Looper.getMainLooper())
         val runnable = object : Runnable {
@@ -229,8 +229,8 @@ class TrailNameDataType(
                 currentTrailColor = difficultyColor(match.trail?.difficulty)
 
                 // --- PROXIMITY BAR ---
-                currentProximity = if (match.distance < 300.0) {
-                    ((300.0 - match.distance) / 300.0 * 100).toInt()
+                currentProximity = if (match.distance < 200.0) {
+                    ((200.0 - match.distance) / 200.0 * 100).toInt()
                 } else {
                     0
                 }

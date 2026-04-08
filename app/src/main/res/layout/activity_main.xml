@@ -6,6 +6,19 @@
     android:padding="16dp">
 
     <Button
+        android:id="@+id/beepToggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:paddingLeft="32dp"
+        android:paddingRight="32dp"
+        android:text="Beep: ON"
+        android:textSize="16sp"
+        android:textColor="@android:color/white"
+        android:backgroundTint="#CC0000"
+        android:layout_marginBottom="8dp" />
+
+    <Button
         android:id="@+id/downloadButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

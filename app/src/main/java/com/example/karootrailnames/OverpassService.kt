@@ -11,6 +11,9 @@ package com.example.karootrailnames
 //   - Free, open, no API key, no authentication
 //   - No rate limits for normal use
 //   - Returns structured JSON with trail geometry and metadata
+//
+// Fallback: If the primary server fails (504, timeout, etc.),
+// automatically retries with a mirror server.
 // ============================================================
 
 import android.util.Log
@@ -19,21 +22,21 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 class OverpassService {
 
     // ============================================================
     // PUBLIC API: Download trails within a radius of a GPS point
     // Called from MainActivity when user taps download button.
-    // Default radius: 20 miles — covers a typical riding area.
+    // Default radius: 25 miles — covers a typical riding area.
     //
     // Converts miles to a lat/lon bounding box since Overpass
     // uses bounding box queries, not radius queries.
     // Uses cosine correction for longitude (degrees get narrower
     // as you move away from the equator).
     // ============================================================
-    suspend fun downloadTrailsNearby(centerLat: Double, centerLon: Double, radiusMiles: Double = 20.0): List<Trail> {
-        // Convert miles to rough lat/lon offset (1 degree lat ~ 69 miles)
+    suspend fun downloadTrailsNearby(centerLat: Double, centerLon: Double, radiusMiles: Double = 25.0): List<Trail> {
         val latOffset = radiusMiles / 69.0
         val lonOffset = radiusMiles / (69.0 * Math.cos(Math.toRadians(centerLat)))
 
@@ -48,19 +51,28 @@ class OverpassService {
     // ============================================================
     // DOWNLOAD PIPELINE
     // Runs on IO dispatcher (background thread) to avoid blocking UI.
-    // Three steps: build query → make HTTP request → parse response
-    // Returns empty list on any failure (network error, timeout, etc.)
+    // Tries primary Overpass server first, falls back to mirror
+    // if the primary fails (504, timeout, etc.).
+    // Returns empty list if all servers fail.
     // ============================================================
     suspend fun downloadTrails(minLat: Double, minLon: Double, maxLat: Double, maxLon: Double): List<Trail> {
         return withContext(Dispatchers.IO) {
-            try {
-                val query = buildQuery(minLat, minLon, maxLat, maxLon)
-                val response = makeRequest(query)
-                parseTrails(response)
-            } catch (e: Exception) {
-                Log.e("OverpassService", "Error downloading trails", e)
-                emptyList()
+            val query = buildQuery(minLat, minLon, maxLat, maxLon)
+            val servers = listOf(
+                "https://overpass-api.de/api/interpreter",
+                "https://overpass.kumi.systems/api/interpreter"
+            )
+            for (server in servers) {
+                try {
+                    Log.d("OverpassService", "Trying server: $server")
+                    val response = makeRequest(query, server)
+                    return@withContext parseTrails(response)
+                } catch (e: Exception) {
+                    Log.e("OverpassService", "Server $server failed: ${e.message}")
+                }
             }
+            Log.e("OverpassService", "All servers failed")
+            emptyList()
         }
     }
 
@@ -73,19 +85,18 @@ class OverpassService {
     //   2. highway=track + name  → Named dirt roads/doubletrack
     //   3. highway=cycleway + name → Named bike paths
     //   4. mtb:scale (any)       → Any way with MTB difficulty rating
-    //                               (catches trails tagged with difficulty
-    //                                but missing standard highway tags)
     //
     // "out body" returns full way data with tags
     // ">" (recurse down) fetches all nodes referenced by those ways
     // "out skel qt" returns node coordinates in optimized format
     //
-    // Timeout: 60 seconds — large areas with dense trail networks
-    // can return thousands of elements.
+    // Timeout: 90 seconds — large areas with dense trail networks
+    // can return thousands of elements. K3 companion app routing
+    // can be slower than direct WiFi.
     // ============================================================
     private fun buildQuery(minLat: Double, minLon: Double, maxLat: Double, maxLon: Double): String {
         return """
-            [out:json][timeout:60];
+            [out:json][timeout:90];
             (
               way["highway"="path"]["name"]($minLat,$minLon,$maxLat,$maxLon);
               way["highway"="track"]["name"]($minLat,$minLon,$maxLat,$maxLon);
@@ -103,25 +114,42 @@ class OverpassService {
     // POST request to Overpass API interpreter endpoint.
     // Uses standard HttpURLConnection (no third-party HTTP libraries).
     //
-    // Timeouts: 30 seconds connect + 30 seconds read
+    // Timeouts: 30 seconds connect + 120 seconds read
     // Content-Type: form-urlencoded (Overpass expects "data=<query>")
+    // Query is URL-encoded to handle special characters properly.
     //
-    // Note: The Karoo needs WiFi or hotspot connectivity for this.
-    // The download happens once; all ride-time matching is offline.
+    // Error handling: checks HTTP response code before reading.
+    // If Overpass returns an error (400, 429, 500, etc.), the error
+    // body is logged and an exception is thrown with the HTTP code.
+    //
+    // Server URL is passed in by downloadTrails() for fallback support.
     // ============================================================
-    private fun makeRequest(query: String): String {
+    private fun makeRequest(query: String, serverUrl: String): String {
         Log.d("OverpassService", "Query: $query")
 
-        val url = URL("https://overpass-api.de/api/interpreter")
+        val url = URL(serverUrl)
         val connection = url.openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.connectTimeout = 30000
-        connection.readTimeout = 30000
+        connection.readTimeout = 120000
         connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        connection.setRequestProperty("User-Agent", "KarooTrailNames/1.4")
 
+        // URL-encode the query to handle special characters
+        val encodedData = "data=${URLEncoder.encode(query, "UTF-8")}"
         connection.outputStream.use { os ->
-            os.write("data=$query".toByteArray())
+            os.write(encodedData.toByteArray())
+        }
+
+        // Check response code before reading
+        val responseCode = connection.responseCode
+        Log.d("OverpassService", "HTTP response code: $responseCode")
+
+        if (responseCode != 200) {
+            val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "No error body"
+            Log.e("OverpassService", "HTTP $responseCode: $errorBody")
+            throw Exception("Overpass API returned HTTP $responseCode")
         }
 
         val response = connection.inputStream.bufferedReader().use { it.readText() }
@@ -149,14 +177,10 @@ class OverpassService {
     //
     // Filtering:
     //   - Skip unnamed trails that have no mtb:scale tag
-    //     (unnamed paths without difficulty are usually driveways,
-    //      service roads, or other non-trail features)
-    //   - Keep unnamed trails WITH mtb:scale (they're real trails
-    //     that just haven't been named in OSM yet)
-    //   - Skip ways with zero resolved nodes (data integrity check)
+    //   - Keep unnamed trails WITH mtb:scale
+    //   - Skip ways with zero resolved nodes
     //
     // Output: List<Trail> ready for TrailStorage to cache locally.
-    // Typical result: 700+ trails in a trail-dense 20-mile radius.
     // ============================================================
     private fun parseTrails(jsonResponse: String): List<Trail> {
         Log.d("OverpassService", "Parsing response, length: ${jsonResponse.length}")
@@ -166,7 +190,6 @@ class OverpassService {
         val elements = json.getJSONArray("elements")
 
         // --- PASS 1: Build node lookup map ---
-        // Nodes are individual GPS coordinates referenced by ID in ways
         val nodeMap = mutableMapOf<Long, TrailNode>()
         for (i in 0 until elements.length()) {
             val element = elements.getJSONObject(i)
@@ -179,7 +202,6 @@ class OverpassService {
         }
 
         // --- PASS 2: Build trail objects from ways ---
-        // Each way is an ordered list of node IDs that form the trail geometry
         for (i in 0 until elements.length()) {
             val element = elements.getJSONObject(i)
             if (element.getString("type") == "way") {
@@ -189,7 +211,6 @@ class OverpassService {
                 val difficulty = tags?.optString("mtb:scale")
 
                 // Skip unnamed trails unless they have mtb:scale
-                // (unnamed + no difficulty = likely not a real trail)
                 if (name == "Unnamed Trail" && difficulty == null) continue
 
                 // Resolve node IDs to actual GPS coordinates
