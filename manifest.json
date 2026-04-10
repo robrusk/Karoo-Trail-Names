@@ -1,13 +1,13 @@
 {
   "label": "Trail Names",
   "packageName": "com.example.karootrailnames",
-  "latestApkUrl": "https://github.com/robrusk/Karoo-Trail-Names/releases/download/v1.5/TrailNames_v1.5.apk",
-  "latestVersion": "1.5",
-  "latestVersionCode": 2,
+  "latestApkUrl": "https://github.com/robrusk/Karoo-Trail-Names/releases/download/v1.5/TrailNames_v1.5.1.apk",
+  "latestVersion": "1.5.1",
+  "latestVersionCode": 3,
   "iconUrl": null,
   "developer": "Rusk Racing",
   "description": "Real-time trail name display with directional arrows, proximity bar, difficulty symbols, and beep+flash alerts. Downloads trail data from OpenStreetMap for offline use during rides. Works on K2 and K3.",
-  "releaseNotes": "v1.5 - K3 support, Overpass server fallback, 30 mile radius, red proximity bar, beep toggle fix. Note: On first install, open the app and tap Download Trails. If GPS is not ready, close the app and reopen it, then tap Download again."
+  "releaseNotes": "v1.5.1 - K3 background GPS fix using Karoo LOCATION stream, green branding, T icon, green proximity bar"
   "screenshotUrls": null,
   "tags": ["trail", "mtb", "navigation", "data-field"]
 }
