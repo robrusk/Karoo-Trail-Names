@@ -29,7 +29,7 @@ class OverpassService {
     // ============================================================
     // PUBLIC API: Download trails within a radius of a GPS point
     // Called from MainActivity when user taps download button.
-    // Default radius: 25 miles — covers a typical riding area.
+    // Default radius: 30 miles — covers a typical riding area.
     //
     // Converts miles to a lat/lon bounding box since Overpass
     // uses bounding box queries, not radius queries.
@@ -96,17 +96,21 @@ class OverpassService {
     // ============================================================
     private fun buildQuery(minLat: Double, minLon: Double, maxLat: Double, maxLon: Double): String {
         return """
-            [out:json][timeout:90];
-            (
-              way["highway"="path"]["name"]($minLat,$minLon,$maxLat,$maxLon);
-              way["highway"="track"]["name"]($minLat,$minLon,$maxLat,$maxLon);
-              way["highway"="cycleway"]["name"]($minLat,$minLon,$maxLat,$maxLon);
-              way["mtb:scale"]($minLat,$minLon,$maxLat,$maxLon);
-            );
-            out body;
-            >;
-            out skel qt;
-        """.trimIndent()
+        [out:json][timeout:90];
+        (
+         way["highway"="path"]["name"]($minLat,$minLon,$maxLat,$maxLon);
+         way["highway"="track"]["name"]($minLat,$minLon,$maxLat,$maxLon);
+         way["highway"="cycleway"]["name"]($minLat,$minLon,$maxLat,$maxLon);
+         way["highway"="secondary"]["name"]($minLat,$minLon,$maxLat,$maxLon);
+         way["surface"="gravel"]["name"]($minLat,$minLon,$maxLat,$maxLon);
+         way["surface"="dirt"]["name"]($minLat,$minLon,$maxLat,$maxLon);
+         way["surface"="unpaved"]["name"]($minLat,$minLon,$maxLat,$maxLon);
+         way["mtb:scale"]($minLat,$minLon,$maxLat,$maxLon);
+        );
+        out body;
+        >;
+        out skel qt;
+    """.trimIndent()
     }
 
     // ============================================================
@@ -134,7 +138,7 @@ class OverpassService {
         connection.connectTimeout = 30000
         connection.readTimeout = 120000
         connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-        connection.setRequestProperty("User-Agent", "KarooTrailNames/1.4")
+        connection.setRequestProperty("User-Agent", "KarooTrailNames/1.5.1")
 
         // URL-encode the query to handle special characters
         val encodedData = "data=${URLEncoder.encode(query, "UTF-8")}"

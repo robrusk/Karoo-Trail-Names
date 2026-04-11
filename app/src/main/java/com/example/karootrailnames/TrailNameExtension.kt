@@ -290,17 +290,6 @@ class TrailNameDataType(
                                             PlayBeepPattern.Tone(0, 100),
                                             PlayBeepPattern.Tone(6000, 300),
                                             PlayBeepPattern.Tone(0, 100),
-                                            PlayBeepPattern.Tone(4000, 300),
-                                            PlayBeepPattern.Tone(0, 100),
-                                            PlayBeepPattern.Tone(5000, 300),
-                                            PlayBeepPattern.Tone(0, 100),
-                                            PlayBeepPattern.Tone(6000, 300),
-                                            PlayBeepPattern.Tone(0, 100),
-                                            PlayBeepPattern.Tone(4000, 300),
-                                            PlayBeepPattern.Tone(0, 100),
-                                            PlayBeepPattern.Tone(5000, 300),
-                                            PlayBeepPattern.Tone(0, 100),
-                                            PlayBeepPattern.Tone(500, 300)
                                         )
                                     )
                                 )
