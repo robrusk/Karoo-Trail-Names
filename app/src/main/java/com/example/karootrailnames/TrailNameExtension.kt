@@ -1,23 +1,30 @@
 package com.example.karootrailnames
 
 // ============================================================
-// Karoo Trail Names Extension - v1.5
+// Karoo Trail Names Extension - v1.5.2
 // Real-time trail name display for Karoo K2/K3
 // Built on karoo-ext 1.1.8 SDK
 // GitHub: https://github.com/robrusk/Karoo-Trail-Names
 // License: MIT
 //
-// IMPORTANT: Uses Karoo's built-in LOCATION data stream instead
-// of Android LocationManager. This ensures background GPS works
-// on both K2 and K3 without needing ACCESS_BACKGROUND_LOCATION.
-// Karoo OS manages location at the system level — we just
-// subscribe to the LOCATION data type like any other sensor.
+// DUAL GPS MODE:
+//   K3: Uses Karoo's built-in LOCATION data stream via
+//       addConsumer/callbackFlow. Works in background.
+//   K2: Uses Android LocationManager. K2 runs older Android
+//       where background location works without special perms.
+//       K2 firmware stopped at 1.613 and doesn't have the
+//       LOCATION data stream available.
 //
-// Pattern borrowed from karoo-headwind by timklge (MIT license).
+// Device detection uses Build.DEVICE to determine K2 vs K3.
 // ============================================================
 
 import android.content.Context
 import android.graphics.Color
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Build
+import android.os.Bundle
 import android.util.Log
 import android.widget.RemoteViews
 import io.hammerhead.karooext.KarooSystemService
@@ -42,9 +49,6 @@ import kotlinx.coroutines.launch
 
 // ============================================================
 // EXTENSION SERVICE
-// Registered in AndroidManifest.xml with intent filter:
-//   io.hammerhead.karooext.KAROO_EXTENSION
-// Karoo OS discovers and binds to this service automatically.
 // ============================================================
 class TrailNameExtension : KarooExtension("trail-name", "1") {
 
@@ -70,45 +74,41 @@ class TrailNameExtension : KarooExtension("trail-name", "1") {
 
 // ============================================================
 // DATA TYPE
-// This is the core of the extension. It does three things:
-//   1. startStream() - Karoo LOCATION stream for trail matching
-//   2. startView()   - Renders trail info on the Karoo data field
-//   3. Alerts        - Hardware buzzer beep + screen flash on arrival
-//
-// GPS is provided by subscribing to Karoo's built-in LOCATION
-// data type via streamDataFlow(DataType.Type.LOCATION). This
-// streams lat/lon/bearing from Karoo's own GPS system — no
-// Android LocationManager needed, no background permissions
-// required. Works on both K2 and K3.
-//
-// KarooSystemService is created inside startStream() for both
-// location consumption and beep dispatch.
+// Dual GPS mode: K3 uses Karoo LOCATION stream, K2 uses
+// Android LocationManager. Both paths feed into the same
+// trail matching and alert logic.
 // ============================================================
 class TrailNameDataType(
     extension: String,
     private val appContext: Context
 ) : DataTypeImpl(extension, "current-trail") {
 
-    // --- Shared state between startStream() and startView() ---
     @Volatile
     private var currentTrailStatus: String = "No Trail"
     @Volatile
     private var currentTrailColor: Int = Color.GRAY
     @Volatile
     private var currentProximity: Int = 0
-
-    // Flash alert
     @Volatile
     private var flashActive: Boolean = false
 
-    // Beep tracking
     private var lastBeepTrail: String = ""
 
     // ============================================================
-    // HELPER: Stream Karoo's built-in LOCATION data type
-    // Uses addConsumer with callbackFlow pattern from karoo-headwind.
-    // Returns a Flow of StreamState that we filter for GPS data.
-    // Works in background on both K2 and K3.
+    // DEVICE DETECTION
+    // K2 runs Android 8.1 on Qualcomm hardware (device "karoo")
+    // K3 runs newer Android (device "k24" or similar)
+    // If we can't determine, default to K3 path (safer)
+    // ============================================================
+    private fun isK2(): Boolean {
+        val device = Build.DEVICE?.lowercase() ?: ""
+        val model = Build.MODEL?.lowercase() ?: ""
+        Log.d("TrailNameDataType", "Device: $device, Model: $model")
+        return device == "karoo" || model.contains("karoo 2")
+    }
+
+    // ============================================================
+    // HELPER: Stream Karoo's built-in LOCATION data type (K3 only)
     // ============================================================
     private fun KarooSystemService.streamLocationFlow(): Flow<StreamState> {
         return callbackFlow {
@@ -184,23 +184,89 @@ class TrailNameDataType(
     }
 
     // ============================================================
-    // DATA STREAM
-    // Subscribes to Karoo's built-in LOCATION data type to get
-    // GPS coordinates. This is the same GPS stream that powers
-    // Karoo's native speed, distance, and map features.
-    //
-    // Pattern from karoo-headwind (timklge, MIT license):
-    //   streamDataFlow(DataType.Type.LOCATION) returns a Flow
-    //   of StreamState. We filter for Streaming states and
-    //   extract lat/lon/bearing from the DataPoint values.
-    //
-    // Works on both K2 and K3 because we're consuming Karoo's
-    // own data stream, not requesting Android GPS directly.
+    // SHARED TRAIL MATCHING LOGIC
+    // Called by both K2 and K3 GPS paths with lat/lon/bearing.
+    // Handles trail matching, display update, beep, flash, and
+    // data point emission.
+    // ============================================================
+    private fun processLocation(
+        lat: Double,
+        lng: Double,
+        bearing: Float,
+        matcher: TrailMatcher,
+        trails: List<Trail>,
+        prefs: android.content.SharedPreferences,
+        karooSystem: KarooSystemService,
+        karooConnected: Boolean,
+        mainHandler: android.os.Handler,
+        emitter: Emitter<StreamState>
+    ) {
+        val match = matcher.findCurrentTrail(
+            currentLat = lat,
+            currentLon = lng,
+            trails = trails,
+            bearing = bearing
+        )
+
+        val symbol = difficultySymbol(match.trail?.difficulty)
+        currentTrailStatus = symbol + matcher.formatTrailStatus(match)
+        currentTrailColor = difficultyColor(match.trail?.difficulty)
+
+        currentProximity = if (match.distance < 200.0) {
+            ((200.0 - match.distance) / 200.0 * 100).toInt()
+        } else {
+            0
+        }
+
+        Log.d("TrailNameDataType", "Status: $currentTrailStatus | Difficulty: ${match.trail?.difficulty} | Proximity: $currentProximity")
+
+        val trailName = match.trail?.name ?: ""
+        val beepEnabled = prefs.getBoolean("beep_enabled", true)
+        if (match.distance < 50.0 && trailName.isNotEmpty() && trailName != lastBeepTrail && beepEnabled) {
+            Log.d("TrailNameDataType", "BEEP! Arrived on: $trailName (karooConnected=$karooConnected)")
+            lastBeepTrail = trailName
+
+            flashActive = true
+            mainHandler.postDelayed({ flashActive = false }, 2000)
+
+            if (karooConnected) {
+                try {
+                    karooSystem.dispatch(
+                        PlayBeepPattern(
+                            listOf(
+                                PlayBeepPattern.Tone(4000, 300),
+                                PlayBeepPattern.Tone(0, 100),
+                                PlayBeepPattern.Tone(5000, 300),
+                                PlayBeepPattern.Tone(0, 100),
+                                PlayBeepPattern.Tone(6000, 300)
+                            )
+                        )
+                    )
+                    Log.d("TrailNameDataType", "PlayBeepPattern dispatched successfully")
+                } catch (e: Exception) {
+                    Log.e("TrailNameDataType", "Beep failed: ${e.message}")
+                }
+            }
+        }
+
+        if (match.distance > 100.0) {
+            lastBeepTrail = ""
+        }
+
+        val dataPoint = DataPoint(
+            dataTypeId = "current-trail",
+            values = mapOf("value" to match.distance)
+        )
+        emitter.onNext(StreamState.Streaming(dataPoint))
+    }
+
+    // ============================================================
+    // DATA STREAM - MAIN ENTRY POINT
+    // Detects K2 vs K3 and uses the appropriate GPS method.
     // ============================================================
     override fun startStream(emitter: Emitter<StreamState>) {
         Log.d("TrailNameDataType", "STARTING STREAM")
 
-        // --- KAROO SYSTEM CONNECTION ---
         val karooSystem = KarooSystemService(appContext)
         var karooConnected = false
         karooSystem.connect { connected ->
@@ -208,7 +274,6 @@ class TrailNameDataType(
             Log.d("TrailNameDataType", "BEEP KarooSystem connected: $connected")
         }
 
-        // Load trails from local cache
         val storage = TrailStorage(appContext)
         val matcher = TrailMatcher()
         val trails = storage.loadAllTrails()
@@ -227,100 +292,110 @@ class TrailNameDataType(
 
         val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
-        // --- KAROO LOCATION STREAM ---
-        // Subscribe to Karoo's LOCATION data type for GPS updates.
-        // This replaces Android LocationManager and works in the
-        // background on both K2 and K3.
-        val job = CoroutineScope(Dispatchers.IO).launch {
-            karooSystem.streamLocationFlow()
-                .mapNotNull { it as? StreamState.Streaming }
-                .mapNotNull { streamState ->
-                    val lat = streamState.dataPoint.values[DataType.Field.LOC_LATITUDE]
-                    val lng = streamState.dataPoint.values[DataType.Field.LOC_LONGITUDE]
-                    val bearing = streamState.dataPoint.values[DataType.Field.LOC_BEARING]
+        if (isK2()) {
+            // ============================================================
+            // K2 PATH: Android LocationManager
+            // K2 runs Android 8.1 where background location works
+            // without special permissions. K2 firmware is frozen at
+            // 1.613 and doesn't have the LOCATION data stream.
+            // ============================================================
+            Log.d("TrailNameDataType", "K2 detected — using LocationManager")
 
-                    if (lat != null && lng != null) {
-                        Triple(lat, lng, bearing ?: 0.0)
-                    } else {
-                        null
+            val locationManager = appContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+            val locationListener = object : LocationListener {
+                override fun onLocationChanged(location: Location) {
+                    processLocation(
+                        lat = location.latitude,
+                        lng = location.longitude,
+                        bearing = location.bearing,
+                        matcher = matcher,
+                        trails = trails,
+                        prefs = prefs,
+                        karooSystem = karooSystem,
+                        karooConnected = karooConnected,
+                        mainHandler = mainHandler,
+                        emitter = emitter
+                    )
+                }
+                override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                override fun onProviderEnabled(provider: String) {}
+                override fun onProviderDisabled(provider: String) {}
+            }
+
+            try {
+                mainHandler.post {
+                    try {
+                        locationManager.requestLocationUpdates(
+                            LocationManager.GPS_PROVIDER, 2000L, 10f, locationListener
+                        )
+                        Log.d("TrailNameDataType", "K2 GPS listener registered on main thread")
+                    } catch (e: SecurityException) {
+                        Log.e("TrailNameDataType", "K2 location permission denied", e)
+                        emitter.onNext(StreamState.NotAvailable)
                     }
                 }
-                .collect { (lat, lng, bearing) ->
+                emitter.onNext(StreamState.Searching)
+            } catch (e: Exception) {
+                Log.e("TrailNameDataType", "K2 error starting GPS", e)
+                emitter.onNext(StreamState.NotAvailable)
+            }
 
-                    // --- TRAIL MATCHING ---
-                    val match = matcher.findCurrentTrail(
-                        currentLat = lat,
-                        currentLon = lng,
-                        trails = trails,
-                        bearing = bearing.toFloat()
-                    )
+            emitter.setCancellable {
+                Log.d("TrailNameDataType", "K2 stream cancelled, cleaning up")
+                karooSystem.disconnect()
+                mainHandler.post {
+                    locationManager.removeUpdates(locationListener)
+                }
+            }
 
-                    // --- FORMAT DISPLAY ---
-                    val symbol = difficultySymbol(match.trail?.difficulty)
-                    currentTrailStatus = symbol + matcher.formatTrailStatus(match)
-                    currentTrailColor = difficultyColor(match.trail?.difficulty)
+        } else {
+            // ============================================================
+            // K3 PATH: Karoo LOCATION data stream
+            // Uses addConsumer/callbackFlow to subscribe to Karoo's
+            // built-in LOCATION data type. Works in background because
+            // Karoo OS manages GPS at the system level.
+            // THIS CODE IS IDENTICAL TO THE WORKING v1.5.2 K3 CODE.
+            // ============================================================
+            Log.d("TrailNameDataType", "K3 detected — using Karoo LOCATION stream")
 
-                    // --- PROXIMITY BAR ---
-                    currentProximity = if (match.distance < 200.0) {
-                        ((200.0 - match.distance) / 200.0 * 100).toInt()
-                    } else {
-                        0
-                    }
+            val job = CoroutineScope(Dispatchers.IO).launch {
+                karooSystem.streamLocationFlow()
+                    .mapNotNull { it as? StreamState.Streaming }
+                    .mapNotNull { streamState ->
+                        val lat = streamState.dataPoint.values[DataType.Field.LOC_LATITUDE]
+                        val lng = streamState.dataPoint.values[DataType.Field.LOC_LONGITUDE]
+                        val bearingVal = streamState.dataPoint.values[DataType.Field.LOC_BEARING]
 
-                    Log.d("TrailNameDataType", "Status: $currentTrailStatus | Difficulty: ${match.trail?.difficulty} | Proximity: $currentProximity")
-
-                    // --- BEEP + FLASH ALERT ---
-                    val trailName = match.trail?.name ?: ""
-                    val beepEnabled = prefs.getBoolean("beep_enabled", true)
-                    if (match.distance < 50.0 && trailName.isNotEmpty() && trailName != lastBeepTrail && beepEnabled) {
-                        Log.d("TrailNameDataType", "BEEP! Arrived on: $trailName (karooConnected=$karooConnected)")
-                        lastBeepTrail = trailName
-
-                        flashActive = true
-                        mainHandler.postDelayed({ flashActive = false }, 2000)
-
-                        if (karooConnected) {
-                            try {
-                                karooSystem.dispatch(
-                                    PlayBeepPattern(
-                                        listOf(
-                                            PlayBeepPattern.Tone(4000, 300),
-                                            PlayBeepPattern.Tone(0, 100),
-                                            PlayBeepPattern.Tone(5000, 300),
-                                            PlayBeepPattern.Tone(0, 100),
-                                            PlayBeepPattern.Tone(6000, 300),
-                                            PlayBeepPattern.Tone(0, 100),
-                                        )
-                                    )
-                                )
-                                Log.d("TrailNameDataType", "PlayBeepPattern dispatched successfully")
-                            } catch (e: Exception) {
-                                Log.e("TrailNameDataType", "Beep failed: ${e.message}")
-                            }
+                        if (lat != null && lng != null) {
+                            Triple(lat, lng, bearingVal ?: 0.0)
+                        } else {
+                            null
                         }
                     }
-
-                    // Reset beep tracking when leaving all trails
-                    if (match.distance > 100.0) {
-                        lastBeepTrail = ""
+                    .collect { (lat, lng, bearing) ->
+                        processLocation(
+                            lat = lat,
+                            lng = lng,
+                            bearing = bearing.toFloat(),
+                            matcher = matcher,
+                            trails = trails,
+                            prefs = prefs,
+                            karooSystem = karooSystem,
+                            karooConnected = karooConnected,
+                            mainHandler = mainHandler,
+                            emitter = emitter
+                        )
                     }
+            }
 
-                    // --- EMIT DATA POINT ---
-                    val dataPoint = DataPoint(
-                        dataTypeId = "current-trail",
-                        values = mapOf("value" to match.distance)
-                    )
-                    emitter.onNext(StreamState.Streaming(dataPoint))
-                }
-        }
+            emitter.onNext(StreamState.Searching)
 
-        emitter.onNext(StreamState.Searching)
-
-        // Cleanup when Karoo stops the stream
-        emitter.setCancellable {
-            Log.d("TrailNameDataType", "Stream cancelled, cleaning up")
-            job.cancel()
-            karooSystem.disconnect()
+            emitter.setCancellable {
+                Log.d("TrailNameDataType", "K3 stream cancelled, cleaning up")
+                job.cancel()
+                karooSystem.disconnect()
+            }
         }
     }
 }
